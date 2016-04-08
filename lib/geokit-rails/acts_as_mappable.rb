@@ -107,8 +107,13 @@ module Geokit
 
       def within(distance, options = {})
         options[:within] = distance
-        #geo_scope(options)
-        where(distance_conditions(options))
+        # Add bounding box to speed up SQL request.
+        bounds = formulate_bounds_from_distance(
+          options,
+          normalize_point_to_lat_lng(options[:origin]), 
+          options[:units] || default_units)
+        with_latlng.where(bound_conditions(bounds)).
+          where(distance_conditions(options))
       end
       alias inside within
 
@@ -137,10 +142,12 @@ module Geokit
         origin  = extract_origin_from_options(options)
         units   = extract_units_from_options(options)
         formula = extract_formula_from_options(options)
-        bounds  = extract_bounds_from_options(options)
         distance_column_name = distance_sql(origin, units, formula)
-        #geo_scope(options).order("#{distance_column_name} asc")
-        order("#{distance_column_name} #{options[:reverse] ? 'DESC' : 'ASC'}")
+        with_latlng.order("#{distance_column_name} #{options[:reverse] ? 'DESC' : 'ASC'}")
+      end
+
+      def with_latlng
+        where("#{qualified_lat_column_name} IS NOT NULL AND #{qualified_lng_column_name} IS NOT NULL")
       end
 
       def closest(options = {})
